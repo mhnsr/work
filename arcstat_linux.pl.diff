@@ -1,0 +1,48 @@
+--- arcstat_linux.pl	2013-04-10 18:31:36.000000000 +0900
++++ arcstat.pl.org	2012-05-12 13:58:48.000000000 +0900
+@@ -1,4 +1,4 @@
+-#!/usr/bin/perl -w
++#!/usr/perl5/bin/perl -w
+ #
+ # Print out ZFS ARC Statistics exported via kstat(1)
+ # For a definition of fields, or usage, use arctstat.pl -v
+@@ -44,6 +44,7 @@
+ 
+ use strict;
+ use POSIX qw(strftime);
++use Sun::Solaris::Kstat;
+ use Getopt::Long;
+ use IO::Handle;
+ 
+@@ -102,6 +103,7 @@
+ my %cur;
+ my %d;
+ my $out;
++my $kstat = Sun::Solaris::Kstat->new();
+ STDOUT->autoflush;
+ 
+ sub detailed_usage {
+@@ -204,19 +206,13 @@
+ # and delta (cur - prev) statistics.
+ sub snap_stats {
+ 	my %prev = %cur;
+-	my %kstatdata = ();
+-	open(IN, "/proc/spl/kstat/zfs/arcstats");
+-	while ( my $line = <IN>) {
+-		my @items = split /\s+/, $line;
+-		$kstatdata{$items[0]} = $items[2];
++	if ($kstat->update()) {
++		printf("<State Changed>\n");
+ 	}
+-	close(IN);
+-
+-	my $hashref_cur = \%kstatdata;
++	my $hashref_cur = $kstat->{"zfs"}{0}{"arcstats"};
+ 	%cur = %$hashref_cur;
+ 	foreach my $key (keys %cur) {
+-                next if $key =~ /^[0-9]/;
+-                next if $key =~ /^name/;
++		next if $key =~ /class/;
+ 		if (defined $prev{$key}) {
+ 			$d{$key} = $cur{$key} - $prev{$key};
+ 		} else {

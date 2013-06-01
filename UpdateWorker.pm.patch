@@ -1,0 +1,67 @@
+--- UpdateWorker.pm.org	2013-04-09 18:13:55.000000000 +0900
++++ UpdateWorker.pm	2013-04-24 12:06:21.000000000 +0900
+@@ -898,34 +898,40 @@
+ 	$current_updated_value = $value;
+     }
+ 
+-    DEBUG "[DEBUG] Updating $rrd_file with @update_rrd_data";
+-    if ($ENV{RRDCACHED_ADDRESS} && (scalar @update_rrd_data > 32) ) {
+-        # RRDCACHED only takes about 4K worth of commands. If the commands is
+-        # too large, we have to break it in smaller calls.
+-        #
+-        # Note that 32 is just an arbitrary choosed number. It might be tweaked.
+-        #
+-        # For simplicity we only call it with 1 update each time, as RRDCACHED
+-        # will buffer for us as suggested on the rrd mailing-list.
+-        # https://lists.oetiker.ch/pipermail/rrd-users/2011-October/018196.html
+-        for my $update_rrd_data (@update_rrd_data) {
+-            RRDs::update($rrd_file, $update_rrd_data);
+-            # Break on error.
+-            last if RRDs::error;
++    # When SpoolReader.pm return last timestamp and plugin_rate over 300sec then RRDs::update is error.
++    # Then, RRDs::update run "$current_updated_timestamp > $previous_updated_timestamp" only.
++    # If "$current_updated_timestamp <= $previous_updated_timestamp" case shold retrun $previous_updated_timestamp ?
++    if ($current_updated_timestamp > $previous_updated_timestamp) {
++        DEBUG "[DEBUG] Updating $rrd_file with @update_rrd_data";
++        if ($ENV{RRDCACHED_ADDRESS} && (scalar @update_rrd_data > 32) ) {
++            # RRDCACHED only takes about 4K worth of commands. If the commands is
++            # too large, we have to break it in smaller calls.
++            #
++            # Note that 32 is just an arbitrary choosed number. It might be tweaked.
++            #
++            # For simplicity we only call it with 1 update each time, as RRDCACHED
++            # will buffer for us as suggested on the rrd mailing-list.
++            # https://lists.oetiker.ch/pipermail/rrd-users/2011-October/018196.html
++            for my $update_rrd_data (@update_rrd_data) {
++                RRDs::update($rrd_file, $update_rrd_data);
++                # Break on error.
++                last if RRDs::error;
++            }
++        } else {
++            RRDs::update($rrd_file, @update_rrd_data);
+         }
+-    } else {
+-        RRDs::update($rrd_file, @update_rrd_data);
+-    }
+ 
+-    if (my $ERROR = RRDs::error) {
+-        #confess Dumper @_;
+-        ERROR "[ERROR] In RRD: Error updating $rrd_file: $ERROR";
++        if (my $ERROR = RRDs::error) {
++            #confess Dumper @_;
++            ERROR "[ERROR] In RRD: Error updating $rrd_file: $ERROR";
++         }
++
++        # Stores the previous and the current value in the state db to avoid having to do an RRD lookup if needed
++        $self->{state}{value}{"$rrd_file:42"}{current} = [ $current_updated_timestamp, $current_updated_value ]; 
++        $self->{state}{value}{"$rrd_file:42"}{previous} = [ $previous_updated_timestamp, $previous_updated_value ]; 
+     }
+ 
+-    # Stores the previous and the current value in the state db to avoid having to do an RRD lookup if needed
+-    $self->{state}{value}{"$rrd_file:42"}{current} = [ $current_updated_timestamp, $current_updated_value ]; 
+-    $self->{state}{value}{"$rrd_file:42"}{previous} = [ $previous_updated_timestamp, $previous_updated_value ]; 
+-
++    DEBUG "[DEBUG] return timestamp is $current_updated_timestamp. previous timestamp is $previous_updated_timestamp.";
+     return $current_updated_timestamp;
+ }
+ 

@@ -1,0 +1,24 @@
+--- SpoolReader.pm.org	2013-04-16 16:46:49.000000000 +0900
++++ SpoolReader.pm	2013-04-24 12:08:47.000000000 +0900
+@@ -113,14 +113,21 @@
+             or die "Unable to open spool file: $!";
+ 
+         my $epoch;
++        my $position = 0;
+ 
+         # wind through to the start of the first results after $timestamp
+         while (<$fh>) {
+             ($epoch) = m/^timestamp (\d+)/ or next;
++            $position = tell($fh) - length($_);
+             logger("Timestamp: $epoch") if $config->{DEBUG};
+             last if ($epoch > $timestamp);
+         }
+ 
++        # for last timestamp return
++        if ( eof $fh && $position != 0 ) {
++           seek($fh , $position , 0);
++        }
++
+         if (eof $fh) {
+             logger("Epoch $timestamp not found in spool file for '$service'")
+                 if $config->{DEBUG};
